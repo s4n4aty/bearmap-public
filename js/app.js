@@ -16,6 +16,50 @@
   var params = new URLSearchParams(location.search);
   var forcedState = params.get('state'); // モック検証用
 
+  // 経過時間による色分け（危険度の直感化）:
+  // 新しい出没ほど警告色、古いものはグレーに沈める（P1: 鮮度の明示）
+  var RECENCY_COLORS = [
+    { maxHours: 24, color: '#d7301f', label: '24時間以内' },
+    { maxHours: 72, color: '#fc8d59', label: '3日以内' },
+    { maxHours: 168, color: '#fec44f', label: '1週間以内' },
+    { maxHours: Infinity, color: '#969696', label: 'それ以前' }
+  ];
+
+  function recencyColor(props) {
+    // 出没日時不明のレコードを「最新」色にすると誤認を招くため、
+    // 日時不明はグレーに倒す（P2: 鮮度をごまかさない）
+    if (!props.event_datetime) return RECENCY_COLORS[RECENCY_COLORS.length - 1].color;
+    var hours = (Date.now() - new Date(props.event_datetime).getTime()) / 36e5;
+    for (var i = 0; i < RECENCY_COLORS.length; i++) {
+      if (hours <= RECENCY_COLORS[i].maxHours) return RECENCY_COLORS[i].color;
+    }
+    return RECENCY_COLORS[RECENCY_COLORS.length - 1].color;
+  }
+
+  // 凡例（画面設計 §3.1 の予約領域: 左下）
+  function addLegend() {
+    var legend = L.control({ position: 'bottomleft' });
+    legend.onAdd = function () {
+      var div = L.DomUtil.create('div', 'legend');
+      var title = document.createElement('div');
+      title.className = 'legend-title';
+      title.textContent = '出没からの経過時間';
+      div.appendChild(title);
+      RECENCY_COLORS.forEach(function (entry) {
+        var row = document.createElement('div');
+        row.className = 'legend-row';
+        var swatch = document.createElement('span');
+        swatch.className = 'legend-swatch';
+        swatch.style.backgroundColor = entry.color;
+        row.appendChild(swatch);
+        row.appendChild(document.createTextNode(entry.label));
+        div.appendChild(row);
+      });
+      return div;
+    };
+    legend.addTo(map);
+  }
+
   // iframe埋め込み時はホイールズームを無効化（画面設計 §4, P6）
   var isEmbedded = window.self !== window.top;
 
@@ -34,6 +78,8 @@
     attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院</a>',
     maxZoom: 18
   }).addTo(map);
+
+  addLegend();
 
   var statusCard = document.getElementById('status-card');
   var statusMessage = document.getElementById('status-message');
@@ -114,10 +160,10 @@
   function renderFeatures(geojson) {
     var layer = L.geoJSON(geojson, {
       pointToLayer: function (feature, latlng) {
-        // MVPは全件同一スタイル（Phase 3 で severity 色分け、画面設計 §5.1）
+        // 経過時間で色分け（Phase 3 で severity 連動も検討、画面設計 §5.1）
         return L.circleMarker(latlng, {
           radius: 8,
-          fillColor: '#d33',
+          fillColor: recencyColor(feature.properties),
           color: '#fff',
           weight: 2,
           opacity: 1,
