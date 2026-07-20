@@ -103,7 +103,7 @@
       link.href = props.source_url;
       link.target = '_blank';
       link.rel = 'noopener';
-      link.textContent = '🔗 出典: 秋田県';
+      link.textContent = '🔗 出典: ' + (props.source || '情報元');
       source.appendChild(link);
       container.appendChild(source);
     }
