@@ -6,8 +6,12 @@
   'use strict';
 
   var DATA_URL = 'data/output.geojson';
+  var PREFECTURES_URL = 'data/japan_prefectures.geojson';
   var INITIAL_CENTER = [39.9, 140.4]; // 対象3県が収まる中心（画面設計 §3.1, P3）
   var INITIAL_ZOOM = 8;
+
+  // データ取得対象の県。これ以外の県はグレーアウト表示する
+  var COVERED_PREFECTURES = ['秋田県', '岩手県', '福島県'];
 
   var params = new URLSearchParams(location.search);
   var forcedState = params.get('state'); // モック検証用
@@ -145,6 +149,28 @@
       el.textContent = '更新: 不明';
     }
   }
+
+  // 未取得県のグレーアウト: 対象県以外を薄いグレーで被覆し、
+  // データ提供範囲を視覚的に明示する（誤解防止: 白地図だと「情報がない=安全」に見える）
+  function renderPrefectureMask() {
+    fetch(PREFECTURES_URL)
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (geojson) {
+        if (!geojson) return;
+        L.geoJSON(geojson, {
+          style: function (feature) {
+            var covered = COVERED_PREFECTURES.indexOf(feature.properties.nam_ja) >= 0;
+            return covered
+              ? { fillOpacity: 0, weight: 1.5, color: '#888' }       // 対象県: 枠線のみ
+              : { fillColor: '#999', fillOpacity: 0.35, weight: 1, color: '#aaa' }; // 未取得県: グレー
+          },
+          interactive: false // マーカー操作を妨げない
+        }).addTo(map);
+      })
+      .catch(function () { /* マスク表示失敗時は素の地図のまま */ });
+  }
+
+  renderPrefectureMask();
 
   function load() {
     // S1 読み込み中
