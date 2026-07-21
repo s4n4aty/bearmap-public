@@ -7,6 +7,7 @@
 
   var DATA_URL = 'data/output.geojson';
   var PREFECTURES_URL = 'data/japan_prefectures.geojson';
+  var MORIOKA_URL = 'data/morioka_city.geojson';
   var INITIAL_CENTER = [39.9, 140.4]; // 対象3県が収まる中心（画面設計 §3.1, P3）
   var INITIAL_ZOOM = 8;
 
@@ -198,12 +199,23 @@
 
   // 未取得県のグレーアウト: 対象県以外を薄いグレーで被覆し、
   // データ提供範囲を視覚的に明示する（誤解防止: 白地図だと「情報がない=安全」に見える）
+  // 岩手県は盛岡市のみ情報取得のため、盛岡市以外はグレーアウトする。
   function renderPrefectureMask() {
-    fetch(PREFECTURES_URL)
-      .then(function (res) { return res.ok ? res.json() : null; })
-      .then(function (geojson) {
-        if (!geojson) return;
-        L.geoJSON(geojson, {
+    Promise.all([
+      fetch(PREFECTURES_URL).then(function (res) { return res.ok ? res.json() : null; }),
+      fetch(MORIOKA_URL).then(function (res) { return res.ok ? res.json() : null; })
+    ])
+      .then(function (results) {
+        var prefectures = results[0];
+        var morioka = results[1];
+        if (!prefectures) return;
+
+        // 岩手県は盛岡市を除いた部分をグレーで表示するため、一旦県リストから外す
+        var features = prefectures.features.filter(function (f) {
+          return f.properties.nam_ja !== '岩手県';
+        });
+
+        L.geoJSON({ type: 'FeatureCollection', features: features }, {
           style: function (feature) {
             var covered = COVERED_PREFECTURES.indexOf(feature.properties.nam_ja) >= 0;
             return covered
@@ -212,6 +224,25 @@
           },
           interactive: false // マーカー操作を妨げない
         }).addTo(map);
+
+        // 岩手県全体をグレーで表示
+        var iwate = prefectures.features.find(function (f) {
+          return f.properties.nam_ja === '岩手県';
+        });
+        if (iwate) {
+          L.geoJSON(iwate, {
+            style: { fillColor: '#999', fillOpacity: 0.35, weight: 1, color: '#aaa' },
+            interactive: false
+          }).addTo(map);
+        }
+
+        // 盛岡市を白で上に重ね、グレーを隠す（ポリゴン演算は使わない）
+        if (morioka) {
+          L.geoJSON(morioka, {
+            style: { fillColor: '#fff', fillOpacity: 0.9, weight: 1.5, color: '#888' },
+            interactive: false
+          }).addTo(map);
+        }
       })
       .catch(function () { /* マスク表示失敗時は素の地図のまま */ });
   }
