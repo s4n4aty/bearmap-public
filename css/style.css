@@ -213,4 +213,10 @@ body {
   .app-title {
     font-size: 14px;
   }
+  .disclaimer {
+    font-size: 10px;
+    line-height: 1.2;
+    padding: 4px 8px;
+    min-height: 32px;
+  }
 }
